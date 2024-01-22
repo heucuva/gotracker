@@ -16,6 +16,7 @@ import (
 	"github.com/gotracker/gotracker/internal/logging"
 	"github.com/gotracker/gotracker/internal/output"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 	"github.com/gotracker/gotracker/internal/playlist"
 	"github.com/gotracker/playback/format"
 	itFeature "github.com/gotracker/playback/format/it/feature"
@@ -53,6 +54,10 @@ func Playlist(pl *playlist.Playlist, features []playbackFeature.Feature, setting
 				lastOrder = row.Order
 			}
 		}
+	}
+
+	if settings.Output.Mixer == nil && settings.Output.SincFilterEnabled {
+		settings.Output.Mixer = mixer.NewMixer(settings.Output.Channels)
 	}
 
 	waveOut, features, err := output.CreateOutputDevice(settings.Output)

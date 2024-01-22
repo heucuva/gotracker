@@ -15,11 +15,13 @@ import (
 
 	"github.com/gotracker/gomixing/mixing"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 	"github.com/gotracker/playback/output"
 )
 
 type fileFlac struct {
-	mix              mixing.Mixer
+	mix              mixer.Mixer
+	channels         int
 	samplesPerSecond int
 	bitsPerSample    int
 
@@ -29,12 +31,18 @@ type fileFlac struct {
 
 func newFileFlacDevice(settings deviceCommon.Settings) (File, error) {
 	fd := fileFlac{
-		mix: mixing.Mixer{
-			Channels: settings.Channels,
-		},
 		samplesPerSecond: settings.SamplesPerSecond,
 		bitsPerSample:    settings.BitsPerSample,
+		mix:              settings.Mixer,
+		channels:         settings.Channels,
 	}
+
+	if fd.mix == nil {
+		fd.mix = mixing.Mixer{
+			Channels: settings.Channels,
+		}
+	}
+
 	f, err := os.OpenFile(settings.Filepath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, err
@@ -63,7 +71,7 @@ func (d *fileFlac) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData
 		BlockSizeMin:  16,
 		BlockSizeMax:  65535,
 		SampleRate:    uint32(d.samplesPerSecond),
-		NChannels:     uint8(d.mix.Channels),
+		NChannels:     uint8(d.channels),
 		BitsPerSample: uint8(d.bitsPerSample),
 	}
 	enc, err := flac.NewEncoder(w, si)
@@ -72,13 +80,13 @@ func (d *fileFlac) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData
 	}
 	defer enc.Close()
 
-	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	panmixer := mixing.GetPanMixer(d.channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
 	}
 
 	var channels frame.Channels
-	switch d.mix.Channels {
+	switch d.channels {
 	case 1:
 		channels = frame.ChannelsMono
 	case 2:
@@ -99,7 +107,7 @@ func (d *fileFlac) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData
 				return nil
 			}
 			mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, d.bitsPerSample, row.Data, row.MixerVolume)
-			subframes := make([]*frame.Subframe, d.mix.Channels)
+			subframes := make([]*frame.Subframe, d.channels)
 			for i := range subframes {
 				subframe := &frame.Subframe{
 					SubHeader: frame.SubHeader{

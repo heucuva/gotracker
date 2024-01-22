@@ -19,10 +19,11 @@ import (
 var (
 	playSettings = play.Settings{
 		Output: deviceCommon.Settings{
-			Channels:         2,
-			SamplesPerSecond: 44100,
-			BitsPerSample:    16,
-			Filepath:         "output.wav",
+			Channels:          2,
+			SamplesPerSecond:  44100,
+			BitsPerSample:     16,
+			Filepath:          "output.wav",
+			SincFilterEnabled: true,
 		},
 		NumPremixBuffers:       64,
 		PanicOnUnhandledEffect: false,
@@ -61,6 +62,7 @@ func init() {
 		persistFlags.StringVarP(&playSettings.Output.Filepath, "output-file", "f", playSettings.Output.Filepath, "output filepath")
 		persistFlags.BoolVar(&disableNativeSamples, "disable-native-samples", disableNativeSamples, "disable preconversion of samples to native sampling format")
 		//persistFlags.BoolVar(&disablePreconvertSamples, "disable-preconvert-samples", disablePreconvertSamples, "disable preconversion of samples to 32-bit floats")
+		persistFlags.BoolVar(&playSettings.Output.SincFilterEnabled, "enable-sinc", playSettings.Output.SincFilterEnabled, "sinc output filter")
 	}
 
 	registerPlayFlags(playCmd.Flags())

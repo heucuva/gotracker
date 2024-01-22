@@ -11,6 +11,7 @@ import (
 	"github.com/gotracker/gomixing/mixing"
 	"github.com/gotracker/gomixing/sampling"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 	"github.com/gotracker/playback/output"
 	directsound "github.com/heucuva/go-directsound"
 	win32 "github.com/heucuva/go-win32"
@@ -27,8 +28,9 @@ type dsoundDevice struct {
 	lpdsbPrimary *directsound.Buffer
 	wfx          *winmm.WAVEFORMATEX
 
-	mix     mixing.Mixer
-	sampFmt sampling.Format
+	mix      mixer.Mixer
+	channels int
+	sampFmt  sampling.Format
 }
 
 // Name returns the device name
@@ -45,9 +47,14 @@ func newDSoundDevice(settings deviceCommon.Settings) (Device, error) {
 		device: device{
 			onRowOutput: settings.OnRowOutput,
 		},
-		mix: mixing.Mixer{
+		mix:      settings.Mixer,
+		channels: settings.Channels,
+	}
+
+	if d.mix == nil {
+		d.mix = mixing.Mixer{
 			Channels: settings.Channels,
-		},
+		}
 	}
 
 	switch settings.BitsPerSample {
@@ -97,7 +104,7 @@ type playbackBuffer struct {
 	writePos   int
 }
 
-func (p *playbackBuffer) Add(mix *mixing.Mixer, row *output.PremixData, pos int, size int, blockAlign int, panmixer mixing.PanMixer, format sampling.Format) (int, error) {
+func (p *playbackBuffer) Add(mix mixer.Mixer, row *output.PremixData, pos int, size int, blockAlign int, panmixer mixing.PanMixer, format sampling.Format) (int, error) {
 	remaining := p.maxSamples - p.writePos
 	samples := row.SamplesLen - pos
 	if samples >= remaining {
@@ -138,7 +145,7 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *output.Premix
 	maxOutstanding := 3
 	maxOutstandingEvents := 1000
 
-	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	panmixer := mixing.GetPanMixer(d.channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
 	}
@@ -223,7 +230,7 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *output.Premix
 					})
 				}
 				for size > 0 {
-					n, err := currentBuffer.Add(&d.mix, row, pos, row.SamplesLen, blockAlign, panmixer, d.sampFmt)
+					n, err := currentBuffer.Add(d.mix, row, pos, row.SamplesLen, blockAlign, panmixer, d.sampFmt)
 					size -= n
 					pos += n
 					if err != nil {

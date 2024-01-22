@@ -13,15 +13,17 @@ import (
 
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
 	"github.com/gotracker/gotracker/internal/output/device/pulseaudio"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 )
 
 const pulseaudioName = "pulseaudio"
 
 type pulseaudioDevice struct {
 	device
-	mix     mixing.Mixer
-	sampFmt sampling.Format
-	pa      *pulseaudio.Client
+	mix      mixer.Mixer
+	channels int
+	sampFmt  sampling.Format
+	pa       *pulseaudio.Client
 }
 
 func (pulseaudioDevice) GetKind() deviceCommon.Kind {
@@ -38,9 +40,14 @@ func newPulseAudioDevice(settings deviceCommon.Settings) (Device, error) {
 		device: device{
 			onRowOutput: settings.OnRowOutput,
 		},
-		mix: mixing.Mixer{
+		mix:      settings.Mixer,
+		channels: settings.Channels,
+	}
+
+	if d.mix == nil {
+		d.mix = mixing.Mixer{
 			Channels: settings.Channels,
-		},
+		}
 	}
 
 	switch settings.BitsPerSample {
@@ -66,7 +73,7 @@ func (d *pulseaudioDevice) Play(in <-chan *output.PremixData) error {
 
 // PlayWithCtx starts the wave output device playing
 func (d *pulseaudioDevice) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData) error {
-	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	panmixer := mixing.GetPanMixer(d.channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
 	}

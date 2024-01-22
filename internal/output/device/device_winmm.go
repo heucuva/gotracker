@@ -11,6 +11,7 @@ import (
 	"github.com/gotracker/gomixing/mixing"
 	"github.com/gotracker/gomixing/sampling"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 	"github.com/gotracker/playback/output"
 	winmm "github.com/heucuva/go-winmm"
 )
@@ -19,9 +20,10 @@ const winmmName = "winmm"
 
 type winmmDevice struct {
 	device
-	mix     mixing.Mixer
-	sampFmt sampling.Format
-	waveout *winmm.WaveOut
+	mix      mixer.Mixer
+	channels int
+	sampFmt  sampling.Format
+	waveout  *winmm.WaveOut
 }
 
 func (winmmDevice) GetKind() deviceCommon.Kind {
@@ -38,9 +40,14 @@ func newWinMMDevice(settings deviceCommon.Settings) (Device, error) {
 		device: device{
 			onRowOutput: settings.OnRowOutput,
 		},
-		mix: mixing.Mixer{
+		mix:      settings.Mixer,
+		channels: settings.Channels,
+	}
+
+	if d.mix == nil {
+		d.mix = mixing.Mixer{
 			Channels: settings.Channels,
-		},
+		}
 	}
 
 	switch settings.BitsPerSample {
@@ -73,7 +80,7 @@ func (d *winmmDevice) PlayWithCtx(ctx context.Context, in <-chan *output.PremixD
 		Row  *output.PremixData
 	}
 
-	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	panmixer := mixing.GetPanMixer(d.channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
 	}

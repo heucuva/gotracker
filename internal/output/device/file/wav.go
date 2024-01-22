@@ -10,12 +10,14 @@ import (
 	"github.com/gotracker/gomixing/mixing"
 	"github.com/gotracker/gomixing/sampling"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/gotracker/internal/output/mixer"
 	"github.com/gotracker/playback/output"
 )
 
 type fileWav struct {
-	mix     mixing.Mixer
-	sampFmt sampling.Format
+	mix      mixer.Mixer
+	channels int
+	sampFmt  sampling.Format
 
 	f  *os.File
 	w  *bufio.Writer
@@ -29,10 +31,16 @@ const (
 
 func newFileWavDevice(settings deviceCommon.Settings) (File, error) {
 	fd := fileWav{
-		mix: mixing.Mixer{
-			Channels: settings.Channels,
-		},
+		mix:      settings.Mixer,
+		channels: settings.Channels,
 	}
+
+	if fd.mix == nil {
+		fd.mix = mixing.Mixer{
+			Channels: settings.Channels,
+		}
+	}
+
 	switch settings.BitsPerSample {
 	case 8:
 		fd.sampFmt = sampling.Format8BitSigned
@@ -112,7 +120,7 @@ func (d *fileWav) Play(in <-chan *output.PremixData, onWrittenCallback WrittenCa
 
 // PlayWithCtx starts the wave output device playing
 func (d *fileWav) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData, onWrittenCallback WrittenCallback) error {
-	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	panmixer := mixing.GetPanMixer(d.channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
 	}
