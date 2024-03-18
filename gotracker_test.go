@@ -38,7 +38,7 @@ func BenchmarkPlayerS3M(b *testing.B) {
 		b.Error(err)
 	}
 
-	out := sampler.NewSampler(44100, 2, nil)
+	out := sampler.NewSampler(44100, 2, 0.5, nil)
 
 	for err == nil {
 		b.Run("generate_s3m", func(b *testing.B) {
@@ -62,7 +62,7 @@ func BenchmarkIT(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sd, _, err = format.Load(".vscode/test/beyond_the_network.it")
+			sd, sfmt, err = format.Load(".vscode/test/beyond_the_network.it")
 			if err != nil {
 				b.Error(err)
 			}
@@ -70,8 +70,9 @@ func BenchmarkIT(b *testing.B) {
 	})
 
 	const (
-		sampleRate     = 44100
-		outputChannels = 2
+		sampleRate       = 44100
+		outputChannels   = 2
+		stereoSeparation = 0.5
 
 		stepDuration = time.Duration(sampleRate * outputChannels * 2)
 	)
@@ -92,7 +93,7 @@ func BenchmarkIT(b *testing.B) {
 	}
 
 	var step time.Duration
-	out := sampler.NewSampler(sampleRate, outputChannels, func(premix *output.PremixData) {
+	out := sampler.NewSampler(sampleRate, outputChannels, stereoSeparation, func(premix *output.PremixData) {
 		if premix != nil {
 			step += time.Duration(premix.SamplesLen) / stepDuration
 			b.SetBytes(int64(premix.SamplesLen))

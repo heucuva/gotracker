@@ -81,12 +81,6 @@ var librariesList = []libraryInfo{
 		Homepage: "https://github.com/gotracker/opl2",
 	},
 	{
-		Name:     "gomixing",
-		Package:  "github.com/gotracker/gomixing",
-		License:  "Unlicense",
-		Homepage: "https://github.com/gotracker/gomixing",
-	},
-	{
 		Name:     "Terminal progress bar for Go",
 		Package:  "github.com/cheggaaa/pb",
 		License:  "BSD-3-Clause",

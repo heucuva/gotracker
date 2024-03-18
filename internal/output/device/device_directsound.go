@@ -8,9 +8,9 @@ import (
 	"errors"
 	"io"
 
-	"github.com/gotracker/gomixing/mixing"
-	"github.com/gotracker/gomixing/sampling"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/playback/mixing"
+	"github.com/gotracker/playback/mixing/sampling"
 	"github.com/gotracker/playback/output"
 	directsound "github.com/heucuva/go-directsound"
 	win32 "github.com/heucuva/go-win32"
@@ -120,7 +120,7 @@ func (p *playbackBuffer) Add(mix *mixing.Mixer, row *output.PremixData, pos int,
 		rear := make([]byte, rem*blockAlign)
 		writeSegs = append(writeSegs, rear)
 	}
-	mix.FlattenTo(writeSegs, panmixer, row.SamplesLen, row.Data, row.MixerVolume, format)
+	mix.FlattenTo(writeSegs, panmixer.NumChannels(), row.SamplesLen, row.Data, row.MixerVolume, format)
 	if err := p.buffer.Unlock(segments); err != nil {
 		return 0, err
 	}

@@ -6,22 +6,28 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gotracker/gotracker/internal/config"
 	"github.com/gotracker/gotracker/internal/profiling"
 )
 
+type profilerCfg struct {
+	Profiler            bool   `pflag:"profiler" env:"profiler" usage:"enable profiler (and supporting http server)"`
+	ProfilerBindAddress string `pflag:"profiler-bind-addr" env:"profiler_bind_addr" usage:"profiler bind address (if enabled)"`
+}
+
 // flags
-var (
-	profiler            bool   = false
-	profilerBindAddress string = "localhost:6060"
-)
+var profilerConfig = config.NewConfig(profilerCfg{
+	Profiler:            false,
+	ProfilerBindAddress: "localhost:6060",
+})
 
 var rootCmd = &cobra.Command{
 	Use:   "gotracker",
 	Short: "Gotracker is a tracked music player",
 	Long:  `Gotracker is a tracked music player written entirely in Go`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if profiler {
-			profiling.Activate(profilerBindAddress)
+		if cfg := profilerConfig.Get(); cfg.Profiler {
+			profiling.Activate(cfg.ProfilerBindAddress)
 		}
 		return nil
 	},
@@ -48,10 +54,9 @@ func Execute() {
 }
 
 func init() {
-	if persistFlags := rootCmd.PersistentFlags(); persistFlags != nil {
-		if profiling.Allowed {
-			persistFlags.BoolVar(&profiler, "profiler", profiler, "enable profiler (and supporting http server)")
-			persistFlags.StringVar(&profilerBindAddress, "profiler-bind-addr", profilerBindAddress, "profiler bind address (if enabled)")
+	if profiling.Allowed {
+		if err := profilerConfig.Overlay(config.StandardOverlays...).Update(rootCmd); err != nil {
+			panic(err)
 		}
 	}
 }

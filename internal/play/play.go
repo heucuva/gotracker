@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"reflect"
 	"sync"
 	"time"
 
@@ -29,14 +28,14 @@ import (
 	"github.com/gotracker/playback/tracing"
 )
 
-func Playlist(pl *playlist.Playlist, features []playbackFeature.Feature, settings *Settings, logger logging.Log) (bool, error) {
+func Playlist(pl *playlist.Playlist, features []playbackFeature.Feature, settings *Settings, outCfg *deviceCommon.Settings, debugCfg *DebugSettings, logger logging.Log) (bool, error) {
 	var (
 		play      playback.Playback
 		progress  *progressBar.ProgressBar
 		lastOrder int
 	)
 
-	settings.Output.OnRowOutput = func(kind deviceCommon.Kind, premix *playbackOutput.PremixData) {
+	outCfg.OnRowOutput = func(kind deviceCommon.Kind, premix *playbackOutput.PremixData) {
 		row := premix.Userdata.(*render.RowRender)
 		switch kind {
 		case deviceCommon.KindSoundCard:
@@ -55,7 +54,7 @@ func Playlist(pl *playlist.Playlist, features []playbackFeature.Feature, setting
 		}
 	}
 
-	waveOut, features, err := output.CreateOutputDevice(settings.Output)
+	waveOut, features, err := output.CreateOutputDevice(*outCfg)
 	if err != nil {
 		return false, err
 	}
@@ -80,17 +79,17 @@ func Playlist(pl *playlist.Playlist, features []playbackFeature.Feature, setting
 		}
 	}()
 
-	features = append(features, playbackFeature.IgnoreUnknownEffect{Enabled: !settings.PanicOnUnhandledEffect})
+	features = append(features, playbackFeature.IgnoreUnknownEffect{Enabled: !debugCfg.PanicOnUnhandledEffect})
 
-	if settings.Tracing {
+	if debugCfg.Tracing {
 		features = append(features, feature.EnableTracing{
-			Filename: settings.TracingFile,
+			Filename: debugCfg.TracingFile,
 		})
 	}
 
 	logger.Printf("Output device: %s\n", waveOut.Name())
 
-	err = r.renderSongs(pl, features, settings, func(m machine.MachineTicker, out *sampler.Sampler, tickInterval time.Duration, tracer tracing.Tracer) error {
+	err = r.renderSongs(pl, features, settings, outCfg, func(m machine.MachineTicker, outCfg *deviceCommon.Settings, out *sampler.Sampler, tickInterval time.Duration, tracer tracing.Tracer) error {
 		defer func() {
 			if progress != nil {
 				progress.Set64(progress.Total)
@@ -138,11 +137,10 @@ func getFeatureByType[T playbackFeature.Feature](features []playbackFeature.Feat
 		return empty, false
 	}
 
-	tt := reflect.TypeOf(empty)
 	for _, f := range features {
-		v := reflect.ValueOf(f)
-		if v.CanConvert(tt) {
-			return v.Convert(tt).Interface().(T), true
+		switch v := f.(type) {
+		case T:
+			return v, true
 		}
 	}
 
@@ -169,9 +167,9 @@ func (p *renderer) Close() error {
 	return nil
 }
 
-type playerCBFunc func(pb machine.MachineTicker, out *sampler.Sampler, tickInterval time.Duration, tracer tracing.Tracer) error
+type playerCBFunc func(pb machine.MachineTicker, outCfg *deviceCommon.Settings, out *sampler.Sampler, tickInterval time.Duration, tracer tracing.Tracer) error
 
-func (p *renderer) renderSongs(pl *playlist.Playlist, features []playbackFeature.Feature, renderSettings *Settings, startPlayingCB playerCBFunc) error {
+func (p *renderer) renderSongs(pl *playlist.Playlist, features []playbackFeature.Feature, renderSettings *Settings, outCfg *deviceCommon.Settings, startPlayingCB playerCBFunc) error {
 	tickInterval := time.Duration(5) * time.Millisecond
 	if setting, ok := getFeatureByType[feature.PlayerSleepInterval](features); ok {
 		if setting.Enabled {
@@ -186,7 +184,7 @@ func (p *renderer) renderSongs(pl *playlist.Playlist, features []playbackFeature
 		canPossiblyLoop = (setting.Count != 0)
 	}
 
-	out := sampler.NewSampler(renderSettings.Output.SamplesPerSecond, renderSettings.Output.Channels, func(premix *playbackOutput.PremixData) {
+	out := sampler.NewSampler(outCfg.SamplesPerSecond, outCfg.Channels, float32(outCfg.StereoSeparation)/100.0, func(premix *playbackOutput.PremixData) {
 		p.outBufs <- premix
 	})
 	if out == nil {
@@ -264,7 +262,7 @@ playlistLoop:
 			return fmt.Errorf("could not create playback machine: %w", err)
 		}
 
-		if err = startPlayingCB(playback, out, tickInterval, us.Tracer); err != nil {
+		if err = startPlayingCB(playback, outCfg, out, tickInterval, us.Tracer); err != nil {
 			continue
 		}
 

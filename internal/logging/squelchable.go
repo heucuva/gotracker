@@ -5,7 +5,7 @@ import (
 )
 
 type Squelchable struct {
-	Squelch bool
+	Squelch bool `pflag:"silent" env:"silent" pf:"q" usage:"disable non-error logging"`
 }
 
 func (s *Squelchable) Printf(format string, args ...any) {

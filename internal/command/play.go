@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
+	"github.com/gotracker/gotracker/internal/config"
 	"github.com/gotracker/gotracker/internal/logging"
 	"github.com/gotracker/gotracker/internal/output"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
@@ -16,68 +16,79 @@ import (
 )
 
 // persistent flags
-var (
-	playSettings = play.Settings{
-		Output: deviceCommon.Settings{
-			Channels:         2,
-			SamplesPerSecond: 44100,
-			BitsPerSample:    16,
-			Filepath:         "output.wav",
-		},
-		NumPremixBuffers:       64,
-		PanicOnUnhandledEffect: false,
-		ITLongChannelOutput:    false,
-		ITEnableNNA:            true,
-	}
-	loopPlaylist         bool = false
-	logger               logging.Squelchable
-	disableNativeSamples bool = false
-	//disablePreconvertSamples bool = false
-)
+var playSettings = config.NewConfig(play.Settings{
+	NumPremixBuffers:    64,
+	ITLongChannelOutput: false,
+	ITEnableNNA:         true,
+})
+
+var playOutputSettings = config.NewConfig(deviceCommon.Settings{
+	Channels:         2,
+	SamplesPerSecond: 44100,
+	BitsPerSample:    16,
+	StereoSeparation: 50, // 50%
+	Filepath:         "output.wav",
+})
 
 // flags
-var (
-	loopSong      bool = false
-	startingOrder int  = -1
-	startingRow   int  = -1
-	randomized    bool = false
-	startingBpm   int  = -1
-	startingTempo int  = -1
-)
+type playFlagCfg struct {
+	LoopSong             bool `flag:"loop-song" env:"loop_song" f:"l" usage:"enable pattern loop (only works in single-song mode)"`
+	StartingOrder        int  `flag:"starting-order" env:"starting_order" f:"o" usage:"starting order (<0 = use song/format default)"`
+	StartingRow          int  `flag:"starting-row" env:"starting_row" f:"r" usage:"starting row (<0 = use song/format default)"`
+	Randomized           bool `flag:"random" env:"random" f:"R" usage:"randomize the playlist"`
+	StartingBPM          int  `flag:"bpm" env:"bpm" usage:"starting BPM (<0 = use song/format default)"`
+	StartingTempo        int  `flag:"tempo" env:"tempo" usage:"starting Tempo (ticks per row) (<0 = use song/format default)"`
+	LoopPlaylist         bool `pflag:"loop-playlist" env:"loop_playlist" pf:"L" usage:"enable playlist loop (only useful in multi-song mode)"`
+	DisableNativeSamples bool `pflag:"disable-native-samples" env:"disable_native_samples" usage:"disable preconversion of samples to native sampling format"`
+	//DisablePreconvertSamples bool `pflag:"disable-preconvert-samples" env:"disable_preconvert_samples" usage:"disable preconversion of samples to 32-bit floats"`
+}
+
+var playFlags = config.NewConfig(playFlagCfg{
+	LoopSong:             false,
+	StartingOrder:        -1,
+	StartingRow:          -1,
+	Randomized:           false,
+	StartingBPM:          -1,
+	StartingTempo:        -1,
+	LoopPlaylist:         false,
+	DisableNativeSamples: false,
+	//DisablePreconvertSamples: false,
+})
+
+var logger = config.NewConfig(logging.Squelchable{
+	Squelch: false,
+})
 
 func init() {
 	output.Setup()
 
-	if persistFlags := playCmd.PersistentFlags(); persistFlags != nil {
-		persistFlags.IntVarP(&playSettings.Output.SamplesPerSecond, "sample-rate", "s", playSettings.Output.SamplesPerSecond, "sample rate")
-		persistFlags.IntVarP(&playSettings.Output.Channels, "channels", "c", playSettings.Output.Channels, "channels")
-		persistFlags.IntVarP(&playSettings.Output.BitsPerSample, "bits-per-sample", "b", playSettings.Output.BitsPerSample, "bits per sample")
-		persistFlags.IntVar(&playSettings.NumPremixBuffers, "num-buffers", playSettings.NumPremixBuffers, "number of premixed buffers")
-		persistFlags.BoolVarP(&loopPlaylist, "loop-playlist", "L", loopPlaylist, "enable playlist loop (only useful in multi-song mode)")
-		persistFlags.BoolVar(&playSettings.ITLongChannelOutput, "it-long", playSettings.ITLongChannelOutput, "enable Impulse Tracker long channel display")
-		persistFlags.BoolVar(&playSettings.ITEnableNNA, "it-enable-nna", playSettings.ITEnableNNA, "enable Impulse Tracker New Note Actions")
-		persistFlags.BoolVarP(&logger.Squelch, "silent", "q", logger.Squelch, "disable non-error logging")
-		persistFlags.StringVarP(&playSettings.Output.Name, "output", "O", output.DefaultOutputDeviceName, "output device")
-		persistFlags.StringVarP(&playSettings.Output.Filepath, "output-file", "f", playSettings.Output.Filepath, "output filepath")
-		persistFlags.BoolVar(&disableNativeSamples, "disable-native-samples", disableNativeSamples, "disable preconversion of samples to native sampling format")
-		//persistFlags.BoolVar(&disablePreconvertSamples, "disable-preconvert-samples", disablePreconvertSamples, "disable preconversion of samples to 32-bit floats")
+	playOutputSettings.Get().Name = output.DefaultOutputDeviceName
+
+	if err := playSettings.Overlay(config.StandardOverlays...).Update(playCmd); err != nil {
+		panic(err)
 	}
 
-	registerPlayFlags(playCmd.Flags())
+	if err := playOutputSettings.Overlay(config.StandardOverlays...).Update(playCmd); err != nil {
+		panic(err)
+	}
+
+	if err := logger.Overlay(config.StandardOverlays...).Update(playCmd); err != nil {
+		panic(err)
+	}
+
+	registerPlayFlags(playCmd)
 
 	rootCmd.AddCommand(playCmd)
 }
 
-func registerPlayFlags(flags *pflag.FlagSet) {
-	if flags == nil {
+func registerPlayFlags(cmd *cobra.Command) {
+	if cmd == nil {
 		return
 	}
-	flags.IntVarP(&startingOrder, "starting-order", "o", startingOrder, "starting order (<0 = use song/format default)")
-	flags.IntVarP(&startingRow, "starting-row", "r", startingRow, "starting row (<0 = use song/format default)")
-	flags.BoolVarP(&loopSong, "loop-song", "l", loopSong, "enable pattern loop (only works in single-song mode)")
-	flags.BoolVarP(&randomized, "random", "R", randomized, "randomize the playlist")
-	flags.IntVarP(&startingBpm, "bpm", "", startingBpm, "starting BPM (<0 = use song/format default)")
-	flags.IntVarP(&startingTempo, "tempo", "", startingTempo, "starting Tempo (ticks per row) (<0 = use song/format default)")
+
+	if err := playFlags.Overlay(config.StandardOverlays...).Update(cmd); err != nil {
+		panic(err)
+	}
 }
 
 var playCmd = &cobra.Command{
@@ -134,25 +145,26 @@ func getPlaylistFromYaml(fn string) (*playlist.Playlist, error) {
 }
 
 func getPlaylistFromArgList(args []string) (*playlist.Playlist, error) {
+	cfg := playFlags.Get()
 	pl := playlist.New()
 	for _, fn := range args {
 		song := playlist.Song{
 			Filepath: fn,
 		}
-		if startingOrder >= 0 {
-			song.Start.Order.Set(startingOrder)
+		if cfg.StartingOrder >= 0 {
+			song.Start.Order.Set(cfg.StartingOrder)
 		}
-		if startingRow >= 0 {
-			song.Start.Row.Set(startingRow)
+		if cfg.StartingRow >= 0 {
+			song.Start.Row.Set(cfg.StartingRow)
 		}
-		if startingBpm >= 0 {
-			song.BPM.Set(startingBpm)
+		if cfg.StartingBPM >= 0 {
+			song.BPM.Set(cfg.StartingBPM)
 		}
-		if startingTempo >= 0 {
-			song.Tempo.Set(startingTempo)
+		if cfg.StartingTempo >= 0 {
+			song.Tempo.Set(cfg.StartingTempo)
 		}
 		if len(args) == 1 {
-			if loopSong {
+			if cfg.LoopSong {
 				song.Loop.Count = playlist.NewLoopForever()
 			} else {
 				song.Loop.Count = playlist.NewLoopCount(0)
@@ -161,14 +173,16 @@ func getPlaylistFromArgList(args []string) (*playlist.Playlist, error) {
 		pl.Add(song)
 	}
 
-	pl.SetLooping(loopPlaylist)
-	pl.SetRandomized(randomized)
+	pl.SetLooping(cfg.LoopPlaylist)
+	pl.SetRandomized(cfg.Randomized)
 	return pl, nil
 }
 
 func playSongs(pl *playlist.Playlist) (bool, error) {
-	var features []feature.Feature
-	features = append(features, feature.UseNativeSampleFormat(!disableNativeSamples))
+	cfg := playFlags.Get()
 
-	return play.Playlist(pl, features, &playSettings, &logger)
+	var features []feature.Feature
+	features = append(features, feature.UseNativeSampleFormat(!cfg.DisableNativeSamples))
+
+	return play.Playlist(pl, features, playSettings.Get(), playOutputSettings.Get(), playDebugSettings.Get(), logger.Get())
 }

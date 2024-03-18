@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/Masterminds/semver"
 	"gopkg.in/yaml.v2"
@@ -98,7 +97,7 @@ func (p *Playlist) SetLooping(value bool) {
 	p.loop.Set(value)
 }
 
-func (p *Playlist) IsLooping() bool {
+func (p Playlist) IsLooping() bool {
 	if v, ok := p.loop.Get(); ok {
 		return v
 	}
@@ -109,7 +108,7 @@ func (p *Playlist) SetRandomized(value bool) {
 	p.randomized.Set(value)
 }
 
-func (p *Playlist) IsRandomized() bool {
+func (p Playlist) IsRandomized() bool {
 	if v, ok := p.randomized.Get(); ok {
 		return v
 	}
@@ -133,9 +132,8 @@ func (p *Playlist) MarkPlayed(s *Song) {
 	}
 }
 
-func (p *Playlist) GetPlaylist() []int {
+func (p Playlist) GetPlaylist() []int {
 	if p.IsRandomized() {
-		rand.Seed(time.Now().Unix())
 	randomize:
 		rand.Shuffle(len(p.currentPlayOrder), func(i, j int) {
 			p.currentPlayOrder[j], p.currentPlayOrder[i] = p.currentPlayOrder[i], p.currentPlayOrder[j]
@@ -153,7 +151,7 @@ func (p *Playlist) GetPlaylist() []int {
 	return p.currentPlayOrder
 }
 
-func (p *Playlist) GetSong(idx int) *Song {
+func (p Playlist) GetSong(idx int) *Song {
 	if idx < 0 || idx >= len(p.songs) {
 		return nil
 	}

@@ -13,8 +13,8 @@ import (
 	"github.com/mewkiz/flac/frame"
 	"github.com/mewkiz/flac/meta"
 
-	"github.com/gotracker/gomixing/mixing"
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
+	"github.com/gotracker/playback/mixing"
 	"github.com/gotracker/playback/output"
 )
 
@@ -98,7 +98,7 @@ func (d *fileFlac) PlayWithCtx(ctx context.Context, in <-chan *output.PremixData
 			if !ok {
 				return nil
 			}
-			mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, d.bitsPerSample, row.Data, row.MixerVolume)
+			mixedData := d.mix.FlattenToInts(panmixer.NumChannels(), row.SamplesLen, d.bitsPerSample, row.Data, row.MixerVolume)
 			subframes := make([]*frame.Subframe, d.mix.Channels)
 			for i := range subframes {
 				subframe := &frame.Subframe{

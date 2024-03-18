@@ -7,8 +7,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gotracker/gomixing/mixing"
-	"github.com/gotracker/gomixing/sampling"
+	"github.com/gotracker/playback/mixing"
+	"github.com/gotracker/playback/mixing/sampling"
 	"github.com/gotracker/playback/output"
 
 	deviceCommon "github.com/gotracker/gotracker/internal/output/device/common"
@@ -82,7 +82,7 @@ func (d *pulseaudioDevice) PlayWithCtx(ctx context.Context, in <-chan *output.Pr
 			if !ok {
 				return nil
 			}
-			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data, row.MixerVolume, d.sampFmt)
+			mixedData := d.mix.Flatten(row.SamplesLen, row.Data, row.MixerVolume, d.sampFmt)
 			d.pa.Output(mixedData)
 			if d.onRowOutput != nil {
 				d.onRowOutput(deviceCommon.KindSoundCard, row)
